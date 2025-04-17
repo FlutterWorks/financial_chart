@@ -7,6 +7,7 @@ import '../values/range.dart';
 import '../values/value.dart';
 import 'panel/panel.dart';
 import 'viewport_h_scaler.dart';
+import 'viewport_resize.dart';
 
 /// Viewport for point (horizontal) axis
 class GPointViewPort extends ChangeNotifier {
@@ -93,6 +94,13 @@ class GPointViewPort extends ChangeNotifier {
 
   /// The auto scale strategy to calculate the range when auto scale enabled.
   final GPointViewPortAutoScaleStrategy? autoScaleStrategy;
+
+  /// Defines the behavior of how to update the viewport range when view size changed.
+  final GValue<GViewPortResizeMode> _viewPortResizeMode =
+      GValue<GViewPortResizeMode>(GViewPortResizeMode.keepEnd);
+  GViewPortResizeMode get viewPortResizeMode => _viewPortResizeMode.value;
+  set viewPortResizeMode(GViewPortResizeMode value) =>
+      _viewPortResizeMode.value = value;
 
   /// The animation milliseconds when auto scaling.
   ///
@@ -285,18 +293,50 @@ class GPointViewPort extends ChangeNotifier {
         .round();
   }
 
+  /// update the viewport range when view size changed
   void resize(double fromSize, double toSize, bool notify) {
-    if (fromSize == toSize) {
+    if (viewPortResizeMode == GViewPortResizeMode.keepRange ||
+        fromSize == toSize ||
+        !isValid) {
       return;
     }
     final pointSizeCurrent = _pointSize(fromSize, startPoint, endPoint);
-    final newStartPoint = endPoint - toSize / pointSizeCurrent;
-    setRange(
-      startPoint: newStartPoint,
-      endPoint: endPoint,
-      finished: true,
-      notify: notify,
-    );
+    if (pointSizeCurrent <= 0) {
+      return;
+    }
+    switch (viewPortResizeMode) {
+      case GViewPortResizeMode.keepStart:
+        final newEndPoint = startPoint + toSize / pointSizeCurrent;
+        setRange(
+          startPoint: startPoint,
+          endPoint: newEndPoint,
+          finished: true,
+          notify: notify,
+        );
+        break;
+      case GViewPortResizeMode.keepEnd:
+        final newStartPoint = endPoint - toSize / pointSizeCurrent;
+        setRange(
+          startPoint: newStartPoint,
+          endPoint: endPoint,
+          finished: true,
+          notify: notify,
+        );
+        break;
+      case GViewPortResizeMode.keepCenter:
+        final centerPoint = (startPoint + endPoint) / 2;
+        final newStartPoint = centerPoint - toSize / (2 * pointSizeCurrent);
+        final newEndPoint = centerPoint + toSize / (2 * pointSizeCurrent);
+        setRange(
+          startPoint: newStartPoint,
+          endPoint: newEndPoint,
+          finished: true,
+          notify: notify,
+        );
+        break;
+      case GViewPortResizeMode.keepRange:
+        break;
+    }
   }
 
   void interactionStart() {
